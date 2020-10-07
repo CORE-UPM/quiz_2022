@@ -11,20 +11,31 @@ const paginate = require('../helpers/paginate').paginate;
 // Autoload el quiz asociado a :quizId
 exports.load = async (req, res, next, quizId) => {
 
-    try {
-        const quiz = await models.Quiz.findByPk(quizId, {
-            include: [
-                {model: models.Attachment, as: 'attachment'},
-                {
-                    model: models.User,
-                    as: 'author',
-                    include: [{
-                        model: models.Attachment,
-                        as: "photo"
-                    }]
-                }
-            ]
+    const options = {
+        include: [
+            {model: models.Attachment, as: 'attachment'},
+            {
+                model: models.User, as: 'author',
+                include: [{
+                    model: models.Attachment,
+                    as: "photo"
+                }]
+            }]
+    };
+
+    // For logged in users: include the favourites of the question by filtering by
+    // the logged in user with an OUTER JOIN.
+    if (req.loginUser) {
+        options.include.push({
+            model: models.User,
+            as: "fans",
+            where: {id: req.loginUser.id},
+            required: false  // OUTER JOIN
         });
+    }
+
+    try {
+        const quiz = await models.Quiz.findByPk(quizId, options);
         if (quiz) {
             req.load = {...req.load, quiz};
             next();
@@ -87,11 +98,15 @@ exports.adminOrAuthorRequired = (req, res, next) => {
 exports.index = async (req, res, next) => {
 
     let countOptions = {
-        where: {}
+        where: {},
+        include: []
     };
     let findOptions = {
-        where: {}
+        where: {},
+        include: []
     };
+
+    const searchfavourites = req.query.searchfavourites || "";
 
     let title = "Quizzes";
 
@@ -101,7 +116,7 @@ exports.index = async (req, res, next) => {
         const search_like = "%" + search.replace(/ +/g, "%") + "%";
 
         countOptions.where.question = {[Op.like]: search_like};
-        findOptions.where.question = { [Op.like]: search_like };
+        findOptions.where.question = {[Op.like]: search_like};
     }
 
     // If there exists "req.load.user", then only the quizzes of that user are shown
@@ -109,10 +124,39 @@ exports.index = async (req, res, next) => {
         countOptions.where.authorId = req.load.user.id;
         findOptions.where.authorId = req.load.user.id;
 
-        if (req.loginUser && req.loginUser.id == req.load.user.id) {
+        if (req.loginUser && req.loginUser.id === req.load.user.id) {
             title = "My Quizzes";
         } else {
             title = "Quizzes of " + req.load.user.displayName;
+        }
+    }
+
+    // Filter: my favourite quizzes:
+    if (req.loginUser) {
+        if (searchfavourites) {
+            const includeMyFans = {
+                model: models.User,
+                as: "fans",
+                where: {id: req.loginUser.id},
+                attributes: ['id']
+            };
+            countOptions.include.push(includeMyFans);
+            findOptions.include.push(includeMyFans);
+        } else {
+
+            // NOTE:
+            // There is an internal error in Sequelize.
+            // It happens when using pagination (option limit) and nested
+            // subqueries (associations).
+            // So, we can not include the following options inside the include attribute
+            // in order to obtain all the quizzes, those marked and not marked as favourites.
+            // It is necesary to obtain all the fans of all the quizzes.
+
+            findOptions.include.push({
+                model: models.User,
+                as: "fans",
+                attributes: ['id']
+            });
         }
     }
 
@@ -130,24 +174,37 @@ exports.index = async (req, res, next) => {
         // This String is added to a local variable of res, which is used into the application layout file.
         res.locals.paginate_control = paginate(count, items_per_page, pageno, req);
 
+
         findOptions.offset = items_per_page * (pageno - 1);
         findOptions.limit = items_per_page;
-        findOptions.include = [
-            {model: models.Attachment, as: 'attachment'},
-            {
-                model: models.User,
-                as: 'author',
-                include: [{
-                    model: models.Attachment,
-                    as: "photo"
-                }]
-            }
-        ];
+
+        findOptions.include.push({
+            model: models.Attachment,
+            as: 'attachment'
+        });
+        findOptions.include.push({
+            model: models.User,
+            as: 'author',
+            include: [{
+                model: models.Attachment,
+                as: "photo"
+            }]
+        });
 
         const quizzes = await models.Quiz.findAll(findOptions);
+
+        // Mark favourite quizzes:
+        if (req.loginUser) {
+            quizzes.forEach(quiz => {
+                quiz.favourite = quiz.fans.some(fan => {
+                    return fan.id == req.loginUser.id;
+                });
+            });
+        }
         res.render('quizzes/index.ejs', {
             quizzes,
             search,
+            searchfavourites,
             title
         });
     } catch (error) {
@@ -157,13 +214,25 @@ exports.index = async (req, res, next) => {
 
 
 // GET /quizzes/:quizId
-exports.show = (req, res, next) => {
+exports.show = async (req, res, next) => {
 
     const {quiz} = req.load;
 
-    res.render('quizzes/show', {
-        quiz
-    });
+    try {
+        // Only for logger users:
+        //   if this quiz is one of my fovourites, then I create
+        //   the attribute "favourite = true"
+        if (req.loginUser) {
+            quiz.favourite = quiz.fans.length > 0;
+        }
+
+        res.render('quizzes/show', {
+            quiz
+
+        });
+    } catch (error) {
+        next(error);
+    }
 };
 
 
@@ -267,7 +336,7 @@ exports.update = async (req, res, next) => {
                 const now = moment();
                 const lastEdition = moment(quiz.attachment.updatedAt);
 
-                if (lastEdition.add(1,"m").isAfter(now)) {
+                if (lastEdition.add(1, "m").isAfter(now)) {
                     req.flash('error', 'Attached file can not be modified until 1 minute has passed.');
                     return
                 }
@@ -315,7 +384,7 @@ exports.destroy = async (req, res, next) => {
         attachment && await attachment.destroy();
         req.flash('success', 'Quiz deleted successfully.');
         res.redirect('/goback');
-    }  catch(error) {
+    } catch (error) {
         req.flash('error', 'Error deleting the Quiz: ' + error.message);
         next(error);
     }
@@ -323,17 +392,29 @@ exports.destroy = async (req, res, next) => {
 
 
 // GET /quizzes/:quizId/play
-exports.play = (req, res, next) => {
+exports.play = async (req, res, next) => {
 
     const {query} = req;
     const {quiz} = req.load;
 
     const answer = query.answer || '';
 
-    res.render('quizzes/play', {
-        quiz,
-        answer
-    });
+    try {
+        // Only for logger users:
+        //   if this quiz is one of my fovourites, then I create
+        //   the attribute "favourite = true"
+        if (req.loginUser) {
+            quiz.favourite = quiz.fans.length > 0;
+        }
+
+        res.render('quizzes/play', {
+            quiz,
+            answer
+
+        });
+    } catch (error) {
+        next(error);
+    }
 };
 
 
