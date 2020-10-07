@@ -10,5 +10,6 @@ const sequelize = new Sequelize(url);
 
 const Session = require('./session')(sequelize, Sequelize.DataTypes);
 const Quiz = require('./quiz')(sequelize, Sequelize.DataTypes);
+const User = require('./user')(sequelize, Sequelize.DataTypes);
 
 module.exports = sequelize;
