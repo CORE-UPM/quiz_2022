@@ -46,10 +46,10 @@ router.get('/users/tokenOwner',
 
 // Routes for the quizzes resource.
 
-router.get('/quizzes',
+router.get('/quizzes.:format?',
     quizApi.index);
 
-router.get('/quizzes/:quizId(\\d+)',
+router.get('/quizzes/:quizId(\\d+).:format?',
     quizApi.show);
 
 router.get('/users/:userId(\\d+)/quizzes',
@@ -123,8 +123,8 @@ router.use(function(err, req, res, next) {
     console.log(emsg);
 
     res.status(err.status || 500)
-    .send({error: emsg})
-    .end();
+        .send({error: emsg})
+        .end();
 });
 
 //-----------------------------------------------------------
