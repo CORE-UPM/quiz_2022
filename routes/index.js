@@ -1,6 +1,12 @@
 var express = require('express');
 var router = express.Router();
 
+const multer = require('multer');
+const storage = multer.memoryStorage()
+const upload = multer({
+    storage: storage,
+    limits: {fileSize: 20 * 1024 * 1024}});
+
 const quizController = require('../controllers/quiz');
 const userController = require('../controllers/user');
 const sessionController = require('../controllers/session');
@@ -164,6 +170,7 @@ router.get('/quizzes/new',
     quizController.new);
 router.post('/quizzes',
     sessionController.loginRequired,
+    upload.single('image'),
     quizController.create);
 router.get('/quizzes/:quizId(\\d+)/edit',
     sessionController.loginRequired,
@@ -172,6 +179,7 @@ router.get('/quizzes/:quizId(\\d+)/edit',
 router.put('/quizzes/:quizId(\\d+)',
     sessionController.loginRequired,
     quizController.adminOrAuthorRequired,
+    upload.single('image'),
     quizController.update);
 router.delete('/quizzes/:quizId(\\d+)',
     sessionController.loginRequired,
@@ -181,5 +189,8 @@ router.delete('/quizzes/:quizId(\\d+)',
 router.get('/quizzes/:quizId(\\d+)/play',  quizController.play);
 router.get('/quizzes/:quizId(\\d+)/check', quizController.check);
 
+// Route to quiz attachment
+router.get('/quizzes/:quizId(\\d+)/attachment',
+    quizController.attachment);
 
 module.exports = router;
