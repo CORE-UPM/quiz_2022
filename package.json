@@ -10,7 +10,17 @@
     "migrate_win": "sequelize db:migrate --url sqlite://%cd%/quiz.sqlite",
     "seed_win": "sequelize db:seed:all --url sqlite://%cd%/quiz.sqlite",
     "migrate_env": "sequelize db:migrate --url $DATABASE_URL",
-    "seed_env": "sequelize db:seed:all --url $DATABASE_URL"
+    "seed_env": "sequelize db:seed:all --url $DATABASE_URL",
+    "open_heroku": "heroku open",
+    "migrate_heroku": "heroku run npm run migrate_env",
+    "seed_heroku": "heroku run npm run seed_env",
+    "reset_heroku": "heroku pg:reset DATABASE",
+    "mon_heroku": "heroku maintenance:on",
+    "moff_heroku": "heroku maintenance:off"
+  },
+  "engines": {
+    "node": "^16.8.0",
+    "npm": "^7.21.0"
   },
   "dependencies": {
     "connect-session-sequelize": "^7.1.2",
@@ -36,10 +46,13 @@
     "passport-linkedin-oauth2": "^2.0.0",
     "passport-local": "^1.0.0",
     "passport-twitter": "^1.0.4",
+    "pg": "^8.7.1",
     "sequelize": "^6.13.0",
     "sequelize-cli": "^6.3.0",
     "serve-favicon": "^2.5.0",
-    "sqlite3": "^5.0.2",
     "supervisor": "^0.12.0"
+  },
+  "devDependencies": {
+    "sqlite3": "^5.0.2"
   }
 }
