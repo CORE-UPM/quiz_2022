@@ -144,12 +144,10 @@ if (!!process.env.QUIZ_OPEN_REGISTER) {
 
 router.get('/users/:userId(\\d+)/edit',
     sessionController.loginRequired,
-    userController.isLocalRequired,
     sessionController.adminOrMyselfRequired,
     userController.edit);
 router.put('/users/:userId(\\d+)',
     sessionController.loginRequired,
-    userController.isLocalRequired,
     sessionController.adminOrMyselfRequired,
     upload.single('photo'),
     userController.update);
@@ -161,6 +159,11 @@ router.delete('/users/:userId(\\d+)',
 // Route to user photo
 router.get('/users/:userId(\\d+)/photo',
     userController.photo);
+
+router.put('/users/:userId(\\d+)/token',
+    sessionController.loginRequired,
+    sessionController.adminOrMyselfRequired,
+    userController.createToken);   // generar un nuevo token
 
 router.get('/users/:userId(\\d+)/quizzes',
     sessionController.loginRequired,
